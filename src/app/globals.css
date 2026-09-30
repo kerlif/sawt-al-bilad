@@ -1,0 +1,428 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: "Markazi Text", "Amiri", serif;
+  --font-mono: ui-monospace, monospace;
+  --font-headline: "Amiri", "Scheherazade New", serif;
+  --font-body: "Markazi Text", "Amiri", serif;
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --color-ink: var(--ink);
+  --color-paper: var(--paper);
+  --color-paper-deep: var(--paper-deep);
+  --color-rule: var(--rule);
+  --color-vermillion: var(--vermillion);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+/* ============ النهار: ورق قديم دافئ (sepia) ============ */
+:root {
+  --radius: 0.25rem;
+  --background: #ece1c8;
+  --foreground: #2b2317;
+  --ink: #2b2317;
+  --paper: #f3ead4;
+  --paper-deep: #e2d4b4;
+  --rule: #8a7a58;
+  --vermillion: #8f2d1e;
+
+  --card: #f3ead4;
+  --card-foreground: #2b2317;
+  --popover: #f3ead4;
+  --popover-foreground: #2b2317;
+  --primary: #4a3c22;
+  --primary-foreground: #f3ead4;
+  --secondary: #e2d4b4;
+  --secondary-foreground: #2b2317;
+  --muted: #e2d4b4;
+  --muted-foreground: #6d5f45;
+  --accent: #d9c69a;
+  --accent-foreground: #2b2317;
+  --destructive: #8f2d1e;
+  --border: #b3a27a;
+  --input: #b3a27a;
+  --ring: #8f2d1e;
+  --chart-1: #8f2d1e;
+  --chart-2: #4a3c22;
+  --chart-3: #6d5f45;
+  --chart-4: #b3a27a;
+  --chart-5: #d9c69a;
+  --sidebar: #f3ead4;
+  --sidebar-foreground: #2b2317;
+  --sidebar-primary: #4a3c22;
+  --sidebar-primary-foreground: #f3ead4;
+  --sidebar-accent: #d9c69a;
+  --sidebar-accent-foreground: #2b2317;
+  --sidebar-border: #b3a27a;
+  --sidebar-ring: #8f2d1e;
+}
+
+/* ============ الليل: حبر داكن بورق مغدّق ============ */
+.dark {
+  --background: #241f16;
+  --foreground: #e8dcc0;
+  --ink: #e8dcc0;
+  --paper: #2b2519;
+  --paper-deep: #201b12;
+  --rule: #6d5f45;
+  --vermillion: #d4593f;
+
+  --card: #2b2519;
+  --card-foreground: #e8dcc0;
+  --popover: #2b2519;
+  --popover-foreground: #e8dcc0;
+  --primary: #e8dcc0;
+  --primary-foreground: #241f16;
+  --secondary: #201b12;
+  --secondary-foreground: #e8dcc0;
+  --muted: #201b12;
+  --muted-foreground: #a89877;
+  --accent: #46392a;
+  --accent-foreground: #e8dcc0;
+  --destructive: #d4593f;
+  --border: #4a3c22;
+  --input: #4a3c22;
+  --ring: #d4593f;
+  --chart-1: #d4593f;
+  --chart-2: #e8dcc0;
+  --chart-3: #a89877;
+  --chart-4: #6d5f45;
+  --chart-5: #46392a;
+  --sidebar: #2b2519;
+  --sidebar-foreground: #e8dcc0;
+  --sidebar-primary: #e8dcc0;
+  --sidebar-primary-foreground: #241f16;
+  --sidebar-accent: #46392a;
+  --sidebar-accent-foreground: #e8dcc0;
+  --sidebar-border: #4a3c22;
+  --sidebar-ring: #d4593f;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-family: "Markazi Text", "Amiri", serif;
+    /* ورق قديم: تظليل حواف + حبيبات خفيفة */
+    background-image:
+      radial-gradient(ellipse at center, transparent 55%, rgba(75, 60, 34, 0.14) 100%),
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2'/%3E%3CfeColorMatrix values='0 0 0 0 0.35 0 0 0 0 0.28 0 0 0 0 0.15 0 0 0 0.05 0'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+  ::selection {
+    background: var(--vermillion);
+    color: var(--paper);
+  }
+}
+
+/* ============ عناصر الجريدة ============ */
+
+.font-headline {
+  font-family: "Amiri", "Scheherazade New", serif;
+}
+
+/* الاسم الرئيسي للجريدة (مستدع) */
+.masthead-title {
+  font-family: "Amiri", "Scheherazade New", serif;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  line-height: 1.15;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.12);
+}
+
+/* خطوط مزدوجة كتوقيع الصحف المطبوعة */
+.rule-double {
+  border-top: 3px solid var(--ink);
+  border-bottom: 1px solid var(--ink);
+  height: 5px;
+}
+.rule-thick {
+  border-top: 2.5px solid var(--ink);
+}
+
+/* تخطيط الأعمدة المطبوعة */
+.newsprint-columns {
+  column-gap: 2rem;
+  column-rule: 1px solid var(--rule);
+}
+@media (min-width: 768px) {
+  .newsprint-columns {
+    column-count: 2;
+  }
+}
+@media (min-width: 1280px) {
+  .newsprint-columns {
+    column-count: 3;
+  }
+}
+.newsprint-item {
+  break-inside: avoid;
+  -webkit-column-break-inside: avoid;
+}
+
+/* تأثير نصف النغمة (halftone) على الصور */
+.halftone {
+  filter: grayscale(0.85) sepia(0.45) contrast(1.05) brightness(0.98);
+  position: relative;
+}
+.halftone-wrap {
+  position: relative;
+  overflow: hidden;
+}
+.halftone-wrap::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: radial-gradient(rgba(43, 35, 23, 0.28) 1px, transparent 1.2px);
+  background-size: 4px 4px;
+  mix-blend-mode: multiply;
+}
+.dark .halftone-wrap::after {
+  background-image: radial-gradient(rgba(0, 0, 0, 0.35) 1px, transparent 1.2px);
+  mix-blend-mode: screen;
+}
+
+/* شريط العاجل المتحرك — بطيء ومريح للقراءة */
+/* بنية: نسختان متماثلتان داخل المسار؛ إزاحة 50% تعطي دوراناً سلساً بلا قفزات */
+@keyframes ticker-rtl {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(50%); }
+}
+.ticker-track {
+  display: inline-flex;
+  white-space: nowrap;
+  /* 110 ثانية لدورة كاملة — سرعة مريحة تتيح قراءة كل عنوان */
+  animation: ticker-rtl 110s linear infinite;
+  will-change: transform;
+}
+.ticker-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 4rem;
+  padding-inline-end: 4rem;
+}
+.ticker:hover .ticker-track {
+  animation-play-state: paused;
+}
+/* نبض شارة العاجل */
+@keyframes flame-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.45; transform: scale(0.88); }
+}
+.ticker-flame {
+  animation: flame-pulse 1.8s ease-in-out infinite;
+}
+/* احترام تفضيل تقليل الحركة */
+@media (prefers-reduced-motion: reduce) {
+  .ticker-track,
+  .ticker-flame {
+    animation: none;
+  }
+}
+
+/* ختم النسخة */
+.stamp {
+  border: 2px solid var(--vermillion);
+  color: var(--vermillion);
+  transform: rotate(-4deg);
+  border-radius: 4px;
+  padding: 0.15rem 0.6rem;
+  font-family: "Amiri", serif;
+  font-weight: 700;
+}
+
+/* أختام الفئات في المقالات */
+.category-tag {
+  font-family: "Amiri", serif;
+  border-top: 2px solid var(--ink);
+  border-bottom: 1px solid var(--rule);
+  padding: 0.1rem 0.5rem;
+  letter-spacing: 0.05em;
+}
+
+/* زخرفة الفاصل النقاطي */
+.diamond-rule {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  color: var(--rule);
+}
+.diamond-rule::before,
+.diamond-rule::after {
+  content: "";
+  flex: 1;
+  border-top: 1px solid var(--rule);
+}
+
+/* محاكاة الطي الوسطي للجريدة */
+.center-fold {
+  background: linear-gradient(
+    to left,
+    transparent 0%,
+    rgba(75, 60, 34, 0.05) 48%,
+    rgba(75, 60, 34, 0.12) 50%,
+    rgba(75, 60, 34, 0.05) 52%,
+    transparent 100%
+  );
+}
+.dark .center-fold {
+  background: linear-gradient(
+    to left,
+    transparent 0%,
+    rgba(0, 0, 0, 0.08) 48%,
+    rgba(0, 0, 0, 0.18) 50%,
+    rgba(0, 0, 0, 0.08) 52%,
+    transparent 100%
+  );
+}
+
+/* شريط تمرير أنيق للوحة التحكم */
+.admin-scroll::-webkit-scrollbar {
+  width: 8px;
+}
+.admin-scroll::-webkit-scrollbar-track {
+  background: var(--paper-deep);
+}
+.admin-scroll::-webkit-scrollbar-thumb {
+  background: var(--rule);
+  border-radius: 4px;
+}
+
+/* نص الفرنسية داخل الجريدة */
+.font-fr {
+  font-family: Georgia, "Times New Roman", serif;
+}
+
+/* ============ الطباعة / تصدير PDF — حجم A4 قياسي ============ */
+/* من نافذة الطباعة اختر «حفظ كـ PDF» للحصول على نسخة ورقية كاملة بالصور والخطوط */
+@media print {
+  @page {
+    size: A4;
+    margin: 12mm 11mm;
+  }
+
+  html {
+    font-size: 10.5pt;
+  }
+
+  /* خلفية نظيفة بلا حبيبات الورق ولا تظليل الحواف */
+  body {
+    background: #ffffff !important;
+    background-image: none !important;
+    color: #1a1712 !important;
+  }
+
+  /* إخفاء العناصر التفاعلية: الشريط، الأدوات، الأزرار، الترقيم */
+  .no-print,
+  .ticker,
+  .back-top,
+  nav[aria-label="فئات الجريدة"],
+  .admin-scroll {
+    display: none !important;
+  }
+
+  /* الحفاظ على ألوان الهوية (الختم الأحمر، العنوان) في PDF */
+  * {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* الترويسة تتقلص قليلاً للورق */
+  .masthead-title {
+    font-size: 2.6rem !important;
+    text-shadow: none;
+  }
+  .center-fold {
+    background: none !important;
+  }
+
+  /* الأعمدة: عمودان متوازنان على الورق */
+  .newsprint-columns {
+    column-count: 2 !important;
+    column-gap: 7mm;
+    column-rule: 1px solid #999;
+  }
+
+  /* كل خبر كتلة واحدة لا تنقسم بين صفحتين */
+  .newsprint-item {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  /* الصور: واضحة وبحجم معقول */
+  .halftone {
+    filter: grayscale(0.4) contrast(1.02) !important;
+  }
+  .halftone-wrap::after {
+    display: none;
+  }
+  img {
+    max-height: 60mm !important;
+  }
+
+  /* الروابط تُقرأ على الورق: يُلحق العنوان الأصلي بعد رابط «تابع الخبر» */
+  .follow-link {
+    border: none;
+    background: none !important;
+    color: #8f2d1e !important;
+    padding: 0;
+  }
+  .follow-link::after {
+    content: " — " attr(href);
+    direction: ltr;
+    unicode-bidi: embed;
+    font-size: 7.5pt;
+    color: #666;
+    font-weight: 400;
+  }
+
+  /* التذييل مطبوع بسيط */
+  footer {
+    background: none !important;
+    border-top: 2px solid #1a1712 !important;
+    color: #1a1712 !important;
+  }
+
+  a {
+    text-decoration: none !important;
+    color: inherit;
+  }
+}
+/* MARKER-XYZ-12345 */

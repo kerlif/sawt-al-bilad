@@ -1,0 +1,96 @@
+// ============================================================
+// «صوت البلاد» — تطبيق أخبار جزائري بطابع صحفي كلاسيكي
+// مخطط قاعدة البيانات (SQLite عبر Prisma)
+// ============================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ------------------------- الأخبار -------------------------
+model NewsItem {
+  id          String   @id @default(cuid())
+  // بصمة التفرد: sha256 للعنوان المطبّع + الرابط المطبّع (منع التكرار)
+  hash        String   @unique
+  // بصمة التشابه: العنوان المطبّع فقط (لكشف تكرار الخبر عبر مصادر متعددة)
+  titleKey    String
+  title       String
+  // ملخص لا يتجاوز ~40 كلمة (احتراماً لحقوق النشر — ليس نص المقال كاملاً)
+  summary     String
+  url         String
+  imageUrl    String?
+  publishedAt DateTime
+  fetchedAt   DateTime @default(now())
+  // "ar" | "fr"
+  language    String   @default("ar")
+  category    String   @default("مجتمع")
+  // هل الخبر عاجل؟ (كلمات مفتاحية دالة أو تكرار عبر مصادر متعددة)
+  isBreaking  Boolean  @default(false)
+  // عدد المصادر التي نشرت الخبر نفسه خلال نافذة زمنية قصيرة
+  sourceCount Int      @default(1)
+  sourceId    String
+  source      Source   @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+
+  @@index([category, publishedAt])
+  @@index([isBreaking, publishedAt])
+  @@index([publishedAt])
+  @@index([titleKey])
+}
+
+// ------------------------- المصادر -------------------------
+model Source {
+  id          String     @id @default(cuid())
+  name        String
+  rssUrl      String     @unique
+  siteUrl     String
+  // "ar" | "fr"
+  language    String     @default("ar")
+  // "rss" (خلاصة نظيفة) | "scrape" (احتياطي — يُنفَّذ باحترام robots.txt)
+  type        String     @default("rss")
+  isActive    Boolean    @default(true)
+  lastFetchAt DateTime?
+  lastStatus  String?
+  itemCount   Int        @default(0)
+  items       NewsItem[]
+}
+
+// ------------------------- بوتات تلغرام -------------------------
+// التوكن يُخزَّن مشفراً AES-256-GCM ولا يظهر أبداً في أي سجل
+model BotToken {
+  id               String    @id @default(cuid())
+  // اسم تعريفي يختاره المستخدم
+  name             String
+  // التوكن المشفر (AES-256-GCM) — لا يُرجع أبداً عبر الـ API
+  encryptedToken   String
+  // HMAC-SHA256 للتوكن للتحقق من التفرد دون فك التشفير
+  tokenFingerprint String    @unique
+  // اسم مستخدم البوت بعد التحقق (مثل @my_news_bot)
+  username         String?
+  isActive         Boolean   @default(false)
+  createdAt        DateTime  @default(now())
+  lastPollAt       DateTime?
+  lastError        String?
+  subscribers      BotSubscriber[]
+}
+
+// مشتركو كل بوت (من أرسل /start)
+model BotSubscriber {
+  id        String   @id @default(cuid())
+  botId     String
+  chatId    String
+  createdAt DateTime @default(now())
+  bot       BotToken @relation(fields: [botId], references: [id], onDelete: Cascade)
+
+  @@unique([botId, chatId])
+}
+
+// ------------------------- الإعدادات -------------------------
+model Setting {
+  key   String @id
+  value String
+}
