@@ -120,3 +120,12 @@ export async function ensureReady(): Promise<void> {
   await ensureSchema();
   await ensureSeeded();
 }
+
+/** استخراج رمز خطأ Prisma (P2021 جدول مفقود، P2025 سجل مفقود…) إن وُجد */
+export function prismaErrorCode(err: unknown): string | undefined {
+  if (typeof err === 'object' && err !== null && 'code' in err) {
+    const code = (err as { code?: unknown }).code;
+    if (typeof code === 'string') return code;
+  }
+  return undefined;
+}

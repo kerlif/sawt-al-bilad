@@ -49,6 +49,16 @@ export async function restartScheduler(): Promise<void> {
 export async function startScheduler(): Promise<void> {
   if (globalStore.__newsScheduler) return; // يعمل بالفعل
 
+  // على Vercel تكون الدوال مؤقتة (serverless) — تشغيل node-cron داخلها
+  // يولّد تحذيرات missed execution بلا أي فائدة. الجدولة هناك عبر
+  // vercel.json (Cron يومي) + الجلب الذاتي فور فتح الجريدة في الواجهة
+  if (process.env.VERCEL) {
+    console.log(
+      '[scheduler] بيئة Vercel — node-cron معطّل (الجدولة عبر vercel.json + الجلب الذاتي عند الفتح)'
+    );
+    return;
+  }
+
   const interval = await getFetchInterval();
   const task = cron.schedule(`*/${interval} * * * *`, async () => {
     try {
@@ -68,11 +78,8 @@ export async function startScheduler(): Promise<void> {
 /** إقلاع الخدمات الخلفية (يُستدعى من نقاط الـ API عند أول طلب) */
 export async function bootBackgroundServices(): Promise<void> {
   // 0) التهيئة الذاتية: مخطط القاعدة + المصادر الافتراضية إن لزم
-  try {
-    await ensureReady();
-  } catch (err) {
-    console.error('[boot] schema/seed failed:', err instanceof Error ? err.message : err);
-  }
+  //    الفشل هنا يُمرَّر للمسار ليعرف أن الجداول غير جاهزة (ويُعاد المحاولة لاحقاً)
+  await ensureReady();
 
   // 1) مزامنة بوتات تلغرام النشطة
   try {
@@ -81,7 +88,7 @@ export async function bootBackgroundServices(): Promise<void> {
     console.error('[boot] telegram sync failed:', err instanceof Error ? err.message : err);
   }
 
-  // 2) جدولة الجلب الدوري
+  // 2) جدولة الجلب الدوري (تُتخطى على Vercel)
   try {
     await startScheduler();
   } catch (err) {
@@ -97,6 +104,9 @@ export function ensureBooted(): Promise<void> {
   if (!g.__bootPromise) {
     g.__bootPromise = bootBackgroundServices().catch((err) => {
       console.error('[boot] lazy boot failed:', err instanceof Error ? err.message : err);
+      // إتاحة إعادة المحاولة في الطلب القادم عند الفشل (مثل بدء بارد حيث /tmp فارغ)
+      g.__bootPromise = undefined;
+      throw err;
     });
   }
   return g.__bootPromise;

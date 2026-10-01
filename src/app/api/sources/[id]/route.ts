@@ -1,6 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { fetchSource } from '@/lib/newsFetcher';
+import { ensureReady, prismaErrorCode } from '@/lib/bootstrap';
+
+// رسالة موحدة عند طلب مصدر غير موجود (قائمة قديمة من نسخة serverless سابقة)
+const NOT_FOUND = {
+  error: 'المصدر غير موجود على هذا الخادم — تُحدَّث القائمة تلقائياً في غرفة التحرير',
+};
 
 // PATCH /api/sources/[id] — تعديل (تفعيل/تعطيل/بيانات)
 export async function PATCH(
@@ -8,6 +14,7 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    await ensureReady();
     const { id } = await params;
     const body = await req.json();
 
@@ -21,6 +28,10 @@ export async function PATCH(
     const source = await db.source.update({ where: { id }, data });
     return NextResponse.json({ ok: true, source });
   } catch (err) {
+    // سجل مفقود ⇒ 404 صريحة بدل 500 غامضة، وتُصلح الواجهة نفسها بإعادة المزامنة
+    if (prismaErrorCode(err) === 'P2025') {
+      return NextResponse.json(NOT_FOUND, { status: 404 });
+    }
     console.error('[api/sources PATCH]', err instanceof Error ? err.message : err);
     return NextResponse.json({ error: 'فشل تعديل المصدر' }, { status: 500 });
   }
@@ -32,10 +43,15 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    await ensureReady();
     const { id } = await params;
     await db.source.delete({ where: { id } });
     return NextResponse.json({ ok: true });
   } catch (err) {
+    // حُذف مسبقاً على نسخة أخرى ⇒ نعتبر العملية ناجحة (حذف متسامح idempotent)
+    if (prismaErrorCode(err) === 'P2025') {
+      return NextResponse.json({ ok: true, alreadyGone: true });
+    }
     console.error('[api/sources DELETE]', err instanceof Error ? err.message : err);
     return NextResponse.json({ error: 'فشل حذف المصدر' }, { status: 500 });
   }
@@ -47,10 +63,11 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    await ensureReady();
     const { id } = await params;
     const source = await db.source.findUnique({ where: { id } });
     if (!source) {
-      return NextResponse.json({ error: 'المصدر غير موجود' }, { status: 404 });
+      return NextResponse.json(NOT_FOUND, { status: 404 });
     }
     const result = await fetchSource(source);
     return NextResponse.json({ ok: true, result });

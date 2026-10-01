@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { startBot, stopBot } from '@/lib/telegramManager';
+import { ensureBooted } from '@/lib/scheduler';
+import { prismaErrorCode } from '@/lib/bootstrap';
 
 // PATCH /api/bots/[id] — تفعيل / تعطيل البوت
 export async function PATCH(
@@ -8,6 +10,7 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    await ensureBooted();
     const { id } = await params;
     const body = await req.json();
     if (typeof body.isActive !== 'boolean') {
@@ -32,6 +35,12 @@ export async function PATCH(
     await stopBot(id);
     return NextResponse.json({ ok: true, started: false });
   } catch (err) {
+    if (prismaErrorCode(err) === 'P2025') {
+      return NextResponse.json(
+        { error: 'البوت غير موجود على هذا الخادم — تُحدَّث القائمة تلقائياً' },
+        { status: 404 }
+      );
+    }
     console.error('[api/bots PATCH]', err instanceof Error ? err.message : err);
     return NextResponse.json({ error: 'فشل تعديل البوت' }, { status: 500 });
   }
@@ -43,11 +52,16 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    await ensureBooted();
     const { id } = await params;
     await stopBot(id);
     await db.botToken.delete({ where: { id } });
     return NextResponse.json({ ok: true });
   } catch (err) {
+    // حُذف مسبقاً على نسخة أخرى ⇒ نجاح متسامح
+    if (prismaErrorCode(err) === 'P2025') {
+      return NextResponse.json({ ok: true, alreadyGone: true });
+    }
     console.error('[api/bots DELETE]', err instanceof Error ? err.message : err);
     return NextResponse.json({ error: 'فشل حذف البوت' }, { status: 500 });
   }

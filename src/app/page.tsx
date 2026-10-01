@@ -51,11 +51,11 @@ const SORTS = [
   { key: 'oldest', label: 'الأقدم' },
 ] as const;
 
-const LANGS = [
+const LANGS: { key: string; label: string; flag?: 'dz' | 'fr' }[] = [
   { key: 'all', label: 'الكل' },
   { key: 'ar', label: 'عربي', flag: 'dz' },
   { key: 'fr', label: 'فرنسي', flag: 'fr' },
-] as const;
+];
 
 /** أيقونة كل قسم */
 const CATEGORY_ICONS: Record<string, (p: { size?: number; className?: string }) => React.ReactNode> = {
@@ -259,7 +259,10 @@ export default function NewspaperPage() {
             }
           }
         }
-      } else if (res.ok) {
+      } else if (!res.ok) {
+        // الخادم لم يجهز بعد (إقلاع بارد) — نُبلغ ثم نُعيد المحاولة لاحقاً
+        throw new Error(`fetch cycle failed: ${res.status}`);
+      } else {
         // احتياط: استضافة لا تدعم البث — نتيجة مجمعة واحدة
         const data = await res.json();
         inserted = data.inserted ?? 0;
@@ -280,9 +283,11 @@ export default function NewspaperPage() {
 
   // ---------- جلب تلقائي عند الفراغ أو القِدم ----------
   // فور فتح أي مستخدم للرابط: إن كانت الطبعة فارغة أو أقدم من 30 دقيقة
-  // انطلق جلب ذاتي فوري مع شريط تقدم أعلى الصفحة ثم اعرض أحدث الأخبار
+  // انطلق جلب ذاتي فوري مع شريط تقدم أعلى الصفحة ثم اعرض أحدث الأخبار.
+  // ملاحظة V1.4.1: لا اعتماد على /api/settings هنا — حتى لو فشل أي طلب
+  // أولي (إقلاع بارد على الاستضافة) يبقى الجلب الذاتي يعمل دائماً
   useEffect(() => {
-    if (loading || autoFetchedRef.current || activeSources === 0) return;
+    if (loading || autoFetchedRef.current) return;
     const stale =
       items.length > 0 &&
       items[0].publishedAt &&
@@ -291,7 +296,7 @@ export default function NewspaperPage() {
       autoFetchedRef.current = true;
       runFetch();
     }
-  }, [items, loading, activeSources, runFetch]);
+  }, [items, loading, runFetch]);
 
   const submitSearch = (e: React.FormEvent) => {
     e.preventDefault();

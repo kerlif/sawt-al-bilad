@@ -6,31 +6,37 @@ import { ensureBooted } from '@/lib/scheduler';
 
 // GET /api/bots — قائمة البوتات (بدون أي توكن!)
 export async function GET() {
-  await ensureBooted();
-  const bots = await db.botToken.findMany({
-    orderBy: { createdAt: 'desc' },
-    include: { _count: { select: { subscribers: true } } },
-  });
-  return NextResponse.json({
-    bots: bots.map((b) => ({
-      id: b.id,
-      name: b.name,
-      username: b.username,
-      isActive: b.isActive,
-      createdAt: b.createdAt,
-      lastPollAt: b.lastPollAt,
-      lastError: b.lastError,
-      subscriberCount: b._count.subscribers,
-      // ملاحظة أمنية: لا نعيد التوكن أبداً — مشفراً أو غير مشفر
-    })),
-    runningBotIds: (await import('@/lib/telegramManager')).getRunningBotIds(),
-  });
+  try {
+    await ensureBooted();
+    const bots = await db.botToken.findMany({
+      orderBy: { createdAt: 'desc' },
+      include: { _count: { select: { subscribers: true } } },
+    });
+    return NextResponse.json({
+      bots: bots.map((b) => ({
+        id: b.id,
+        name: b.name,
+        username: b.username,
+        isActive: b.isActive,
+        createdAt: b.createdAt,
+        lastPollAt: b.lastPollAt,
+        lastError: b.lastError,
+        subscriberCount: b._count.subscribers,
+        // ملاحظة أمنية: لا نعيد التوكن أبداً — مشفراً أو غير مشفر
+      })),
+      runningBotIds: (await import('@/lib/telegramManager')).getRunningBotIds(),
+    });
+  } catch (err) {
+    console.error('[api/bots GET]', err instanceof Error ? err.message : err);
+    return NextResponse.json({ bots: [], runningBotIds: [], error: 'قاعدة البيانات قيد التهيئة' }, { status: 503 });
+  }
 }
 
 // POST /api/bots — تسجيل بوت جديد بتوكن المستخدم
 // التوكن يُخزَّن مشفراً AES-256-GCM ولا يظهر في أي سجل
 export async function POST(req: NextRequest) {
   try {
+    await ensureBooted();
     const body = await req.json();
     const name = String(body.name ?? '').trim() || 'بوت الأخبار';
     const token = String(body.token ?? '').trim();

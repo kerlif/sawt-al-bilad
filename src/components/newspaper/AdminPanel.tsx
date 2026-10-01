@@ -127,17 +127,23 @@ export default function AdminPanel({
   }, [open]);
 
   // إعادة تحميل بعد العمليات (خارج التأثير)
+  // محصّنة ضد فشل أي طلب — لأن الخادم قد يكون قيد تهيئة قاعدته
   const loadAll = async () => {
-    const [s, b, st, cfg] = await Promise.all([
-      fetch('/api/sources').then((r) => r.json()),
-      fetch('/api/bots').then((r) => r.json()),
-      fetch('/api/stats').then((r) => r.json()),
-      fetch('/api/settings').then((r) => r.json()),
-    ]);
-    setSources(s.sources ?? []);
-    setBots(b.bots ?? []);
-    setStats(st);
-    setIntervalMin(cfg.fetchIntervalMinutes ?? 12);
+    try {
+      const [s, b, st, cfg] = await Promise.all([
+        fetch('/api/sources').then((r) => r.json()),
+        fetch('/api/bots').then((r) => r.json()),
+        fetch('/api/stats').then((r) => r.json()),
+        fetch('/api/settings').then((r) => r.json()),
+      ]);
+      setSources(s.sources ?? []);
+      setBots(b.bots ?? []);
+      // نتجاهل جسم خطأ 503 حتى لا تُعرض أرقام فارغة
+      if (st && typeof st.totalNews === 'number') setStats(st);
+      setIntervalMin(cfg.fetchIntervalMinutes ?? 12);
+    } catch {
+      // تجاهل — تُعاد المحاولة مع العملية القادمة أو عند إعادة فتح اللوحة
+    }
   };
 
   const addSource = async () => {
@@ -147,7 +153,7 @@ export default function AdminPanel({
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name: srcName, rssUrl: srcUrl, language: srcLang }),
     });
-    const data = await res.json();
+    const data = await res.json().catch(() => ({}));
     setBusy(false);
     if (res.ok) {
       toast({ title: 'أضيف المصدر — سيُجلب في الدورة القادمة' });
@@ -155,25 +161,48 @@ export default function AdminPanel({
       setSrcUrl('');
       loadAll();
       onChanged();
+    } else if (res.status === 503) {
+      toast({
+        title: 'الخادم قيد التهيئة — أعد المحاولة بعد لحظات',
+        variant: 'destructive',
+      });
     } else {
       toast({ title: 'خطأ', description: data.error, variant: 'destructive' });
     }
   };
 
   const toggleSource = async (id: string, isActive: boolean) => {
-    await fetch(`/api/sources/${id}`, {
+    const res = await fetch(`/api/sources/${id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ isActive }),
     });
+    if (!res.ok) {
+      // معرّف قديم من نسخة سابقة ⇒ مزامنة ذاتية للقائمة بدل فشل صامت
+      const data = await res.json().catch(() => ({}));
+      toast({
+        title: 'قائمة المصادر قديمة — حُدّثت الآن، أعد المحاولة',
+        description: data.error,
+        variant: 'destructive',
+      });
+    }
     loadAll();
   };
 
   const testSource = async (id: string) => {
     setBusy(true);
     const res = await fetch(`/api/sources/${id}`, { method: 'POST' });
-    const data = await res.json();
+    const data = await res.json().catch(() => ({}));
     setBusy(false);
+    if (res.status === 404) {
+      // قائمة قديمة من إقلاع سابق — الشفاء الذاتي: مزامنة فورية
+      toast({
+        title: 'قائمة المصادر قديمة — حُدّثت الآن، أعد المحاولة',
+        variant: 'destructive',
+      });
+      loadAll();
+      return;
+    }
     const r = data.result;
     if (r?.ok) {
       toast({
@@ -187,8 +216,13 @@ export default function AdminPanel({
   };
 
   const deleteSource = async (id: string) => {
-    await fetch(`/api/sources/${id}`, { method: 'DELETE' });
-    toast({ title: 'حُذف المصدر' });
+    const res = await fetch(`/api/sources/${id}`, { method: 'DELETE' });
+    if (res.ok) {
+      toast({ title: 'حُذف المصدر' });
+    } else {
+      const data = await res.json().catch(() => ({}));
+      toast({ title: 'تعذر الحذف', description: data.error, variant: 'destructive' });
+    }
     loadAll();
     onChanged();
   };
@@ -241,8 +275,13 @@ export default function AdminPanel({
   };
 
   const deleteBot = async (id: string) => {
-    await fetch(`/api/bots/${id}`, { method: 'DELETE' });
-    toast({ title: 'حُذف البوت (التوكن مشفراً لن يُستخدم بعد الآن)' });
+    const res = await fetch(`/api/bots/${id}`, { method: 'DELETE' });
+    if (res.ok) {
+      toast({ title: 'حُذف البوت (التوكن مشفراً لن يُستخدم بعد الآن)' });
+    } else {
+      const data = await res.json().catch(() => ({}));
+      toast({ title: 'تعذر حذف البوت', description: data.error, variant: 'destructive' });
+    }
     loadAll();
   };
 
@@ -252,17 +291,22 @@ export default function AdminPanel({
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ fetchIntervalMinutes: v }),
     });
-    const data = await res.json();
+    const data = await res.json().catch(() => ({}));
     if (res.ok) {
       toast({ title: `الجلب كل ${data.fetchIntervalMinutes} دقيقة` });
       setIntervalMin(data.fetchIntervalMinutes);
+    } else {
+      toast({
+        title: 'تعذر حفظ الإعداد — أعد المحاولة بعد لحظات',
+        variant: 'destructive',
+      });
     }
   };
 
   const fetchNow = async () => {
     setBusy(true);
     const res = await fetch('/api/fetch', { method: 'POST' });
-    const data = await res.json();
+    const data = await res.json().catch(() => ({}));
     setBusy(false);
     if (res.ok) {
       toast({

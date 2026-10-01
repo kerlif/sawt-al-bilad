@@ -1,31 +1,43 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
+import { ensureReady } from '@/lib/bootstrap';
 
 // GET /api/sources — قائمة المصادر
 export async function GET() {
-  const sources = await db.source.findMany({
-    orderBy: [{ isActive: 'desc' }, { name: 'asc' }],
-    include: { _count: { select: { items: true } } },
-  });
-  return NextResponse.json({
-    sources: sources.map((s) => ({
-      id: s.id,
-      name: s.name,
-      rssUrl: s.rssUrl,
-      siteUrl: s.siteUrl,
-      language: s.language,
-      type: s.type,
-      isActive: s.isActive,
-      lastFetchAt: s.lastFetchAt,
-      lastStatus: s.lastStatus,
-      itemCount: s._count.items,
-    })),
-  });
+  try {
+    // ضمان جاهزية الجداول (حرج على بيئات serverless ذات الإقلاع البارد)
+    await ensureReady();
+    const sources = await db.source.findMany({
+      orderBy: [{ isActive: 'desc' }, { name: 'asc' }],
+      include: { _count: { select: { items: true } } },
+    });
+    return NextResponse.json({
+      sources: sources.map((s) => ({
+        id: s.id,
+        name: s.name,
+        rssUrl: s.rssUrl,
+        siteUrl: s.siteUrl,
+        language: s.language,
+        type: s.type,
+        isActive: s.isActive,
+        lastFetchAt: s.lastFetchAt,
+        lastStatus: s.lastStatus,
+        itemCount: s._count.items,
+      })),
+    });
+  } catch (err) {
+    console.error('[api/sources GET]', err instanceof Error ? err.message : err);
+    return NextResponse.json(
+      { error: 'قاعدة البيانات قيد التهيئة — أعد المحاولة بعد لحظات' },
+      { status: 503 }
+    );
+  }
 }
 
 // POST /api/sources — إضافة مصدر جديد
 export async function POST(req: NextRequest) {
   try {
+    await ensureReady();
     const body = await req.json();
     const name = String(body.name ?? '').trim();
     const rssUrl = String(body.rssUrl ?? '').trim();
