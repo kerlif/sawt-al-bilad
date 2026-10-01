@@ -425,4 +425,34 @@
     color: inherit;
   }
 }
+
+/* ============ شريط تقدم الجلب ============ */
+
+/* النمط غير المحدد — قبل وصول عدد المصادر من الخادم */
+@keyframes fetchIndet {
+  0%,
+  100% {
+    width: 15%;
+  }
+  50% {
+    width: 55%;
+  }
+}
+.fetchbar-indet {
+  animation: fetchIndet 1.4s ease-in-out infinite;
+}
+
+/* ============ تصحيحات الحوارات في الواجهة العربية RTL ============ */
+
+/* زر إغلاق الحوار: في RTL يوضع يساراً كي لا يطابق بداية العنوان */
+[dir="rtl"] [data-slot="dialog-close"] {
+  right: auto;
+  left: 1rem;
+}
+
+/* ترويسة الحوار: محاذاة يمين في RTL بدل يسار */
+[dir="rtl"] [data-slot="dialog-header"] {
+  text-align: right;
+}
+
 /* MARKER-XYZ-12345 */

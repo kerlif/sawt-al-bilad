@@ -12,6 +12,7 @@ import Masthead from '@/components/newspaper/Masthead';
 import BreakingTicker from '@/components/newspaper/BreakingTicker';
 import ArticleCard, { NewsItemData } from '@/components/newspaper/ArticleCard';
 import AdminPanel from '@/components/newspaper/AdminPanel';
+import FetchProgress, { FetchProgressState } from '@/components/newspaper/FetchProgress';
 import { FlagDZ, FlagFR } from '@/components/newspaper/flags';
 import {
   BookOpenIcon,
@@ -24,6 +25,7 @@ import {
   MoonIcon,
   NewspaperIcon,
   PrinterIcon,
+  RefreshIcon,
   ScaleIcon,
   SearchIcon,
   SunIcon,
@@ -119,6 +121,10 @@ export default function NewspaperPage() {
 
   const [adminOpen, setAdminOpen] = useState(false);
 
+  // شريط تقدم الجلب الحي (جلب ذاتي عند الفتح + زر التحديث)
+  const [fetchState, setFetchState] = useState<FetchProgressState | null>(null);
+  const fetchBusyRef = useRef(false);
+
   const autoFetchedRef = useRef(false);
   const firstRenderRef = useRef(true);
 
@@ -208,8 +214,73 @@ export default function NewspaperPage() {
     return () => clearInterval(t);
   }, []);
 
+  // ---------- دورة الجلب مع شريط تقدم حي ----------
+  // تُستخدم في الحالتين: الجلب الذاتي عند فتح الجريدة، وزر «تحديث» الثابت
+  // تطلب نسخة بث تدريجي (NDJSON) فتعرض نسبة التقدم الحقيقية لكل مصدر
+  const runFetch = useCallback(async () => {
+    if (fetchBusyRef.current) return;
+    fetchBusyRef.current = true;
+    setFetchState({ done: 0, total: 0, source: '', inserted: 0, finished: false });
+    let inserted = 0;
+    try {
+      const res = await fetch('/api/fetch', {
+        method: 'POST',
+        headers: { Accept: 'application/x-ndjson' },
+      });
+      const ct = res.headers.get('content-type') ?? '';
+      if (res.ok && res.body && ct.includes('application/x-ndjson')) {
+        // قراءة البث سطراً سطراً وتحديث شريط التقدم فوراً
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buf = '';
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buf += decoder.decode(value, { stream: true });
+          const lines = buf.split('\n');
+          buf = lines.pop() ?? '';
+          for (const line of lines) {
+            if (!line.trim()) continue;
+            try {
+              const ev = JSON.parse(line);
+              if (ev.type === 'progress') {
+                setFetchState({
+                  done: ev.done ?? 0,
+                  total: ev.total ?? 0,
+                  source: ev.sourceName ?? '',
+                  inserted: 0,
+                  finished: false,
+                });
+              } else if (ev.type === 'done') {
+                inserted = ev.inserted ?? 0;
+              }
+            } catch {
+              // سطر تالف — يُتجاهل ولا يُسقط البث
+            }
+          }
+        }
+      } else if (res.ok) {
+        // احتياط: استضافة لا تدعم البث — نتيجة مجمعة واحدة
+        const data = await res.json();
+        inserted = data.inserted ?? 0;
+      }
+      setFetchState((s) => (s ? { ...s, finished: true, inserted } : s));
+      // لحظة عرض رسالة الإتمام ثم إخفاء الشريط وتجديد العدد
+      setTimeout(() => {
+        setFetchState(null);
+        setRefreshKey((k) => k + 1);
+      }, 900);
+    } catch {
+      setFetchState(null);
+      toast({ title: 'تعذر الجلب — تحقق من الاتصال', variant: 'destructive' });
+    } finally {
+      fetchBusyRef.current = false;
+    }
+  }, [toast]);
+
   // ---------- جلب تلقائي عند الفراغ أو القِدم ----------
-  // يضمن أول عدد تلقائياً بدون تدخل، ويحدّث العدد القديم (مفيد جداً للاستضافة السحابية)
+  // فور فتح أي مستخدم للرابط: إن كانت الطبعة فارغة أو أقدم من 30 دقيقة
+  // انطلق جلب ذاتي فوري مع شريط تقدم أعلى الصفحة ثم اعرض أحدث الأخبار
   useEffect(() => {
     if (loading || autoFetchedRef.current || activeSources === 0) return;
     const stale =
@@ -218,12 +289,9 @@ export default function NewspaperPage() {
       Date.now() - new Date(items[0].publishedAt).getTime() > 30 * 60 * 1000;
     if (items.length === 0 || stale) {
       autoFetchedRef.current = true;
-      toast({ title: 'جارٍ جمع أخبار جديدة من المصادر الوطنية…' });
-      fetch('/api/fetch', { method: 'POST' })
-        .catch(() => {})
-        .finally(() => setRefreshKey((k) => k + 1));
+      runFetch();
     }
-  }, [items, loading, activeSources]);
+  }, [items, loading, activeSources, runFetch]);
 
   const submitSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -237,6 +305,7 @@ export default function NewspaperPage() {
   ];
 
   const isHome = !activeCat;
+  const fetching = fetchState !== null;
   const catIcon = activeCat ? CATEGORY_ICONS[activeCat] ?? NewspaperIcon : NewspaperIcon;
   const CatIcon = catIcon as (p: { size?: number; className?: string }) => React.ReactNode;
   const catDescription =
@@ -254,44 +323,58 @@ export default function NewspaperPage() {
 
         <BreakingTicker refreshKey={refreshKey} />
 
-        {/* ---------- شريط الأقسام الثابت — كل قسم صفحة مستقلة ---------- */}
+        {/* ---------- شريط الأقسام الثابت — كل قسم صفحة مستقلة + زر تحديث مثبت ---------- */}
         <nav
           aria-label="فئات الجريدة"
           className="no-print sticky top-0 z-40 mt-3 border-y border-rule bg-paper/95 backdrop-blur-sm"
         >
-          <div className="flex gap-0.5 overflow-x-auto py-1.5 px-1 admin-scroll">
-            <a
-              href="#/"
-              aria-current={isHome ? 'page' : undefined}
-              className={`shrink-0 px-3 py-1 text-base md:text-lg font-headline transition-colors border-r border-rule/50 ${
-                isHome ? 'bg-ink text-paper' : 'hover:bg-paper-deep'
-              }`}
+          <div className="flex items-stretch">
+            <div className="flex min-w-0 flex-1 gap-0.5 overflow-x-auto py-1.5 px-1 admin-scroll">
+              <a
+                href="#/"
+                aria-current={isHome ? 'page' : undefined}
+                className={`shrink-0 px-3 py-1 text-base md:text-lg font-headline transition-colors border-r border-rule/50 ${
+                  isHome ? 'bg-ink text-paper' : 'hover:bg-paper-deep'
+                }`}
+              >
+                الرئيسية
+              </a>
+              {navCategories.map((c) => {
+                const active = activeCat === c.name;
+                const isBreaking = c.name === 'عاجل';
+                const Icon = CATEGORY_ICONS[c.name];
+                return (
+                  <a
+                    key={c.name}
+                    href={`#/category/${encodeURIComponent(c.name)}`}
+                    aria-current={active ? 'page' : undefined}
+                    className={`shrink-0 px-3 py-1 text-base md:text-lg font-headline transition-colors border-r border-rule/50 last:border-l inline-flex items-center gap-1.5 ${
+                      active
+                        ? 'bg-ink text-paper'
+                        : isBreaking
+                          ? 'text-vermillion hover:bg-vermillion/10'
+                          : 'hover:bg-paper-deep'
+                    }`}
+                  >
+                    {Icon && <Icon size={14} />}
+                    {c.name}
+                    <span className="mr-1 text-xs opacity-70">({c.count})</span>
+                  </a>
+                );
+              })}
+            </div>
+
+            {/* زر التحديث الفوري — مثبت أعلى الصفحة دائماً دون فتح غرفة التحرير */}
+            <button
+              onClick={runFetch}
+              disabled={fetching}
+              title="تحديث الأخبار الآن — جلب فوري من كل المصادر"
+              aria-label="تحديث الأخبار الآن"
+              className="shrink-0 inline-flex items-center gap-1.5 border-r border-rule/50 px-3 font-headline text-base md:text-lg transition-colors hover:bg-vermillion hover:text-paper disabled:pointer-events-none disabled:opacity-60"
             >
-              الرئيسية
-            </a>
-            {navCategories.map((c) => {
-              const active = activeCat === c.name;
-              const isBreaking = c.name === 'عاجل';
-              const Icon = CATEGORY_ICONS[c.name];
-              return (
-                <a
-                  key={c.name}
-                  href={`#/category/${encodeURIComponent(c.name)}`}
-                  aria-current={active ? 'page' : undefined}
-                  className={`shrink-0 px-3 py-1 text-base md:text-lg font-headline transition-colors border-r border-rule/50 last:border-l inline-flex items-center gap-1.5 ${
-                    active
-                      ? 'bg-ink text-paper'
-                      : isBreaking
-                        ? 'text-vermillion hover:bg-vermillion/10'
-                        : 'hover:bg-paper-deep'
-                  }`}
-                >
-                  {Icon && <Icon size={14} />}
-                  {c.name}
-                  <span className="mr-1 text-xs opacity-70">({c.count})</span>
-                </a>
-              );
-            })}
+              <RefreshIcon size={15} className={fetching ? 'animate-spin' : ''} />
+              <span className="hidden min-[420px]:inline">تحديث</span>
+            </button>
           </div>
         </nav>
 
@@ -523,6 +606,9 @@ export default function NewspaperPage() {
       </footer>
 
       <BackToTop />
+
+      {/* شريط تقدم الجلب — أعلى الصفحة (جلب ذاتي عند الفتح + زر التحديث) */}
+      <FetchProgress state={fetchState} />
 
       <AdminPanel open={adminOpen} onOpenChange={setAdminOpen} onChanged={() => setRefreshKey((k) => k + 1)} />
     </div>

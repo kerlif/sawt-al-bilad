@@ -326,7 +326,16 @@ export async function fetchSource(source: {
 
 // ------------------------- جلب جميع المصادر -------------------------
 
-export async function fetchAllSources(): Promise<{
+/** حدث تقدم — يُطلق بعد اكتمال كل مصدر لعرض شريط تقدم حي في الواجهة */
+export interface FetchProgressEvent {
+  done: number;
+  total: number;
+  sourceName: string;
+  ok: boolean;
+  inserted: number;
+}
+
+export async function fetchAllSources(onProgress?: (e: FetchProgressEvent) => void): Promise<{
   total: number;
   ok: number;
   failed: number;
@@ -335,13 +344,27 @@ export async function fetchAllSources(): Promise<{
   details: FetchSourceResult[];
 }> {
   const sources = await db.source.findMany({ where: { isActive: true } });
+  const total = sources.length;
 
   // جلب متوازٍ مع حد أقصى 4 مصادر في وقت واحد (عدم إغراق الخوادم)
   const details: FetchSourceResult[] = [];
   const CONCURRENCY = 4;
+  let done = 0;
   for (let i = 0; i < sources.length; i += CONCURRENCY) {
     const batch = sources.slice(i, i + CONCURRENCY);
-    const batchResults = await Promise.all(batch.map((s) => fetchSource(s)));
+    const batchResults = await Promise.all(
+      batch.map((s) =>
+        fetchSource(s).then((r) => {
+          done++;
+          try {
+            onProgress?.({ done, total, sourceName: s.name, ok: r.ok, inserted: r.inserted });
+          } catch {
+            // فشل إبلاغ التقدم لا يُسقط الجلب
+          }
+          return r;
+        })
+      )
+    );
     details.push(...batchResults);
   }
 

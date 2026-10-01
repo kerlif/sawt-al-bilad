@@ -278,23 +278,23 @@ export default function AdminPanel({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[88vh] w-[min(880px,96vw)] overflow-y-auto admin-scroll bg-paper text-ink" dir="rtl">
+      <DialogContent className="admin-dialog max-h-[92dvh] w-[min(880px,96vw)] max-w-[96vw] sm:max-w-[min(880px,96vw)] overflow-y-auto admin-scroll bg-paper text-ink p-4 sm:p-6" dir="rtl">
         <DialogHeader>
-          <DialogTitle className="font-headline text-2xl inline-flex items-center gap-2">
+          <DialogTitle className="font-headline text-xl md:text-2xl inline-flex items-center gap-2">
             <LandmarkIcon size={22} /> غرفة التحرير
           </DialogTitle>
-          <DialogDescription>
+          <DialogDescription className="text-sm md:text-base">
             إدارة المصادر، بوتات تلغرام، إعدادات الجلب — من هنا يدير المحرر الجريدة
           </DialogDescription>
         </DialogHeader>
 
-        {/* تبويبات */}
-        <div className="flex gap-1 border-b border-rule">
+        {/* تبويبات — قابلة للتمرير أفقياً على الشاشات الضيقة */}
+        <div className="flex gap-1 border-b border-rule overflow-x-auto admin-scroll">
           {TABS.map(({ key: k, label }) => (
             <button
               key={k}
               onClick={() => setTab(k)}
-              className={`px-3 py-1.5 text-sm md:text-base -mb-px border border-b-0 rounded-t transition-colors ${
+              className={`shrink-0 whitespace-nowrap px-3 py-1.5 text-sm md:text-base -mb-px border border-b-0 rounded-t transition-colors ${
                 tab === k
                   ? 'bg-paper-deep border-rule font-bold'
                   : 'border-transparent opacity-60 hover:opacity-100'
@@ -307,7 +307,7 @@ export default function AdminPanel({
 
         {/* شريط الإحصائيات */}
         {stats && (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-center text-sm">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center text-sm">
             <div className="border border-rule bg-paper-deep p-2">
               <div className="text-xl font-bold">{stats.totalNews}</div>
               <div className="opacity-70">خبر</div>
@@ -333,12 +333,12 @@ export default function AdminPanel({
 
         {/* ---------- تبويب المصادر ---------- */}
         {tab === 'sources' && (
-          <div className="space-y-4">
+          <div className="space-y-4 min-w-0 overflow-hidden">
             <div className="border border-rule bg-paper-deep p-3 space-y-2">
               <h4 className="font-headline text-lg font-bold inline-flex items-center gap-1.5">
                 <PlusIcon size={16} /> إضافة مصدر جديد
               </h4>
-              <div className="grid gap-2 md:grid-cols-3">
+              <div className="grid gap-2 sm:grid-cols-3">
                 <div className="space-y-1">
                   <Label htmlFor="src-name">اسم المصدر</Label>
                   <Input
@@ -391,14 +391,14 @@ export default function AdminPanel({
                     onCheckedChange={(v) => toggleSource(s.id, v)}
                     aria-label="تفعيل المصدر"
                   />
-                  <div className="flex-1 min-w-40">
+                  <div className="flex-1 min-w-0">
                     <div className="font-bold">
                       {s.name}{' '}
                       <span className="text-xs opacity-60">
                         ({s.language === 'fr' ? 'FR' : 'عربي'})
                       </span>
                     </div>
-                    <div className="text-xs text-muted-foreground truncate max-w-md" dir="ltr" style={{ textAlign: 'left' }}>
+                    <div className="text-xs text-muted-foreground truncate max-w-full min-w-0" dir="ltr" style={{ textAlign: 'left' }}>
                       {s.rssUrl}
                     </div>
                     {s.lastStatus && (
@@ -427,7 +427,7 @@ export default function AdminPanel({
 
         {/* ---------- تبويب البوتات ---------- */}
         {tab === 'bots' && (
-          <div className="space-y-4">
+          <div className="space-y-4 min-w-0 overflow-hidden">
             {/* تحذير أمني صريح كما تتطلب المواصفات */}
             <div className="border-2 border-vermillion bg-vermillion/5 p-3 text-sm leading-relaxed">
               <h4 className="font-headline text-lg font-bold text-vermillion inline-flex items-center gap-1.5">
@@ -454,7 +454,7 @@ export default function AdminPanel({
               <h4 className="font-headline text-lg font-bold inline-flex items-center gap-1.5">
                 <PlusIcon size={16} /> ربط بوت تلغرام
               </h4>
-              <div className="grid gap-2 md:grid-cols-2">
+              <div className="grid gap-2 sm:grid-cols-2">
                 <div className="space-y-1">
                   <Label htmlFor="bot-name">اسم تعريفي</Label>
                   <Input
@@ -506,7 +506,7 @@ export default function AdminPanel({
                     onCheckedChange={(v) => toggleBot(b.id, v)}
                     aria-label="تفعيل البوت"
                   />
-                  <div className="flex-1 min-w-40">
+                  <div className="flex-1 min-w-0">
                     <div className="font-bold">
                       {b.name}{' '}
                       {b.username && (
@@ -539,7 +539,7 @@ export default function AdminPanel({
 
         {/* ---------- تبويب الإعدادات ---------- */}
         {tab === 'settings' && (
-          <div className="space-y-4">
+          <div className="space-y-4 min-w-0 overflow-hidden">
             <div className="border border-rule bg-paper-deep p-3 space-y-2">
               <h4 className="font-headline text-lg font-bold inline-flex items-center gap-1.5">
                 <TimerIcon size={16} /> فاصل الجلب الدوري
