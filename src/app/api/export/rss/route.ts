@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { ensureReady } from '@/lib/bootstrap';
+import { ensureNewsFresh } from '@/lib/autofill';
 
 function esc(s: string): string {
   return s
@@ -12,9 +13,13 @@ function esc(s: string): string {
 
 // GET /api/export/rss — تصدير الأخبار كخلاصة RSS للمطورين
 // معلمات: category، lang، limit
+export const maxDuration = 60;
+export const dynamic = 'force-dynamic';
+
 export async function GET(req: NextRequest) {
   try {
     await ensureReady();
+    await ensureNewsFresh();
     const sp = req.nextUrl.searchParams;
     const category = sp.get('category')?.trim() || undefined;
     const lang = sp.get('lang')?.trim() || undefined;
@@ -68,6 +73,7 @@ export async function GET(req: NextRequest) {
       headers: {
         'Content-Type': 'application/rss+xml; charset=utf-8',
         'Access-Control-Allow-Origin': '*',
+        'Cache-Control': 'no-store',
       },
     });
   } catch (err) {

@@ -13,13 +13,13 @@ export async function GET() {
     return NextResponse.json({
       ok: true,
       service: 'صوت البلاد',
-      version: '1.4.1',
+      version: '1.4.2',
       db: { ok: true, sources, news },
     });
   } catch (err) {
     console.error('[api/health]', err instanceof Error ? err.message : err);
     return NextResponse.json(
-      { ok: false, service: 'صوت البلاد', version: '1.4.1', db: { ok: false } },
+      { ok: false, service: 'صوت البلاد', version: '1.4.2', db: { ok: false } },
       { status: 500 }
     );
   }

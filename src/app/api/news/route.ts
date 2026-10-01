@@ -1,12 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { ensureBooted } from '@/lib/scheduler';
+import { ensureNewsFresh } from '@/lib/autofill';
 
 // GET /api/news — قائمة الأخبار مع بحث وفرز وفلترة
 // معلمات: category، search، lang (ar|fr)، sort (newest|oldest|breaking)، page، limit، breaking=1
+// شفاء ذاتي: إن كانت الطبعة فارغة/قديمة على هذه النسخة (serverless /tmp)
+// تُشغَّل دورة جلب داخل الطلب قبل الإجابة — فلا تُعاد قائمة فارغة أبداً
+// وهناك نسخة تعمل بينما أخبارها في نسخة أخرى
+export const maxDuration = 60;
+export const dynamic = 'force-dynamic';
+
 export async function GET(req: NextRequest) {
   try {
     await ensureBooted();
+    await ensureNewsFresh();
     const sp = req.nextUrl.searchParams;
     const category = sp.get('category')?.trim() || undefined;
     const search = sp.get('search')?.trim() || undefined;
@@ -42,7 +50,8 @@ export async function GET(req: NextRequest) {
       db.newsItem.count({ where }),
     ]);
 
-    return NextResponse.json({
+    return NextResponse.json(
+      {
       items: items.map((n) => ({
         id: n.id,
         title: n.title,
@@ -59,9 +68,14 @@ export async function GET(req: NextRequest) {
       total,
       page,
       pages: Math.max(1, Math.ceil(total / limit)),
-    });
+      },
+      { headers: { 'Cache-Control': 'no-store' } }
+    );
   } catch (err) {
     console.error('[api/news]', err instanceof Error ? err.message : err);
-    return NextResponse.json({ error: 'فشل تحميل الأخبار' }, { status: 500 });
+    return NextResponse.json(
+      { items: [], total: 0, page: 1, pages: 1, error: 'فشل تحميل الأخبار' },
+      { status: 500, headers: { 'Cache-Control': 'no-store' } }
+    );
   }
 }

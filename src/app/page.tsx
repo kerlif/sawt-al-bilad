@@ -125,7 +125,7 @@ export default function NewspaperPage() {
   const [fetchState, setFetchState] = useState<FetchProgressState | null>(null);
   const fetchBusyRef = useRef(false);
 
-  const autoFetchedRef = useRef(false);
+  const autoAttemptsRef = useRef(0);
   const firstRenderRef = useRef(true);
 
   // ---------- التنقل بين الصفحات (الرئيسية / صفحة قسم) عبر الهاش ----------
@@ -281,22 +281,27 @@ export default function NewspaperPage() {
     }
   }, [toast]);
 
-  // ---------- جلب تلقائي عند الفراغ أو القِدم ----------
+  // ---------- جلب تلقائي ذكي عند الفراغ أو القِدم ----------
   // فور فتح أي مستخدم للرابط: إن كانت الطبعة فارغة أو أقدم من 30 دقيقة
-  // انطلق جلب ذاتي فوري مع شريط تقدم أعلى الصفحة ثم اعرض أحدث الأخبار.
-  // ملاحظة V1.4.1: لا اعتماد على /api/settings هنا — حتى لو فشل أي طلب
-  // أولي (إقلاع بارد على الاستضافة) يبقى الجلب الذاتي يعمل دائماً
+  // انطلق جلب ذاتي مع شريط تقدم أعلى الصفحة. وحتى لو أُجيبنا من نسخة
+  // خادم فارغة (serverless) تُعاد المحاولة حتى 3 مرات — ثم يبقى
+  // زرّا «تحديث» و«إعادة المحاولة» متاحين يدوياً دائماً.
   useEffect(() => {
-    if (loading || autoFetchedRef.current) return;
+    if (loading || fetchState) return; // لا تتراكم المحاولات أثناء تحميل أو شريط نشط
     const stale =
       items.length > 0 &&
       items[0].publishedAt &&
       Date.now() - new Date(items[0].publishedAt).getTime() > 30 * 60 * 1000;
+    if (items.length === 0 && autoAttemptsRef.current >= 3) return; // استُنفدت المحاولات — الإعادة أصبحت يدوية
     if (items.length === 0 || stale) {
-      autoFetchedRef.current = true;
-      runFetch();
+      autoAttemptsRef.current += 1;
+      // مهلة قصيرة بين المحاولات لمنح خادماً جديداً فرصة الإقلاع والشفاء
+      const delay = autoAttemptsRef.current > 1 ? 1500 : 0;
+      const t = setTimeout(() => runFetch(), delay);
+      return () => clearTimeout(t);
     }
-  }, [items, loading, runFetch]);
+    autoAttemptsRef.current = 0; // نجحت القراءة — صفّر العدّاد
+  }, [items, loading, fetchState, runFetch]);
 
   const submitSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -320,6 +325,15 @@ export default function NewspaperPage() {
 
   const featured = isHome && page === 1 && !search && sort === 'newest' ? items[0] : undefined;
   const rest = featured ? items.slice(1) : items;
+
+  // أثناء التحميل الأول على نسخة خادم باردة قد يستغرق الشفاء الذاتي ثوانٍ —
+  // نعرض شريط التحضير غير المحدد فوراً حتى لا تبدو الصفحة معلقة
+  const initialPreparing = loading && items.length === 0 && fetchState === null;
+  const progressState: FetchProgressState | null =
+    fetchState ??
+    (initialPreparing
+      ? { done: 0, total: 0, source: '', inserted: 0, finished: false }
+      : null);
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -517,14 +531,40 @@ export default function NewspaperPage() {
           ) : items.length === 0 ? (
             <div className="py-16 text-center space-y-3">
               <FileTextIcon size={40} className="mx-auto text-muted-foreground" />
-              <p className="font-headline text-2xl">الصفحة بيضاء</p>
-              <p className="opacity-70">
-                لا أخبار مطابقة بعد — يجري جمع العدد تلقائياً من المصادر، أو افتح{' '}
-                <button onClick={() => setAdminOpen(true)} className="underline text-vermillion">
-                  غرفة التحرير
-                </button>{' '}
-                واضغط «جلب الآن».
+              <p className="font-headline text-2xl">العدد قيد التجهيز</p>
+              <p className="mx-auto max-w-xl opacity-70 leading-relaxed">
+                لم تصل الأخبار بعد إلى هذه النسخة من الخادم — يحدث هذا بعد إقلاع بارد على
+                الاستضافة السحابية. اضغط «تحديث الأخبار الآن» لإعادة محاولة الجلب فوراً،
+                أو انتظر لحظات وسيتجدّد العدد تلقائياً.
               </p>
+              <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
+                <Button
+                  size="sm"
+                  onClick={runFetch}
+                  disabled={fetching}
+                  className="font-headline"
+                >
+                  <RefreshIcon size={14} className={fetching ? 'animate-spin' : ''} />
+                  تحديث الأخبار الآن
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setRefreshKey((k) => k + 1)}
+                  disabled={loading}
+                  className="font-headline"
+                >
+                  إعادة تحميل الصفحة
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setAdminOpen(true)}
+                  className="font-headline"
+                >
+                  غرفة التحرير
+                </Button>
+              </div>
             </div>
           ) : (
             <>
@@ -612,8 +652,8 @@ export default function NewspaperPage() {
 
       <BackToTop />
 
-      {/* شريط تقدم الجلب — أعلى الصفحة (جلب ذاتي عند الفتح + زر التحديث) */}
-      <FetchProgress state={fetchState} />
+      {/* شريط تقدم الجلب — أعلى الصفحة (التحضير الأول + الجلب الذاتي + زر التحديث) */}
+      <FetchProgress state={progressState} />
 
       <AdminPanel open={adminOpen} onOpenChange={setAdminOpen} onChanged={() => setRefreshKey((k) => k + 1)} />
     </div>

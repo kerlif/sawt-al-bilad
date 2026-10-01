@@ -1,12 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { ensureReady } from '@/lib/bootstrap';
+import { ensureNewsFresh } from '@/lib/autofill';
 
 // GET /api/export/json — تصدير الأخبار JSON للمطورين
 // معلمات: category، lang، limit (افتراضي 50، أقصى 200)
+export const maxDuration = 60;
+export const dynamic = 'force-dynamic';
+
 export async function GET(req: NextRequest) {
   try {
     await ensureReady();
+    await ensureNewsFresh();
     const sp = req.nextUrl.searchParams;
     const category = sp.get('category')?.trim() || undefined;
     const lang = sp.get('lang')?.trim() || undefined;
@@ -45,7 +50,7 @@ export async function GET(req: NextRequest) {
           sourceSite: n.source.siteUrl,
         })),
       },
-      { headers: { 'Access-Control-Allow-Origin': '*' } }
+      { headers: { 'Access-Control-Allow-Origin': '*', 'Cache-Control': 'no-store' } }
     );
   } catch (err) {
     console.error('[api/export/json]', err instanceof Error ? err.message : err);
