@@ -25,15 +25,22 @@ export async function GET(req: NextRequest) {
     const limit = Math.min(60, Math.max(1, parseInt(sp.get('limit') ?? '24', 10) || 24));
 
     const where: Record<string, unknown> = {};
-    if (category && category !== 'الكل') where.category = category;
     if (lang && lang !== 'all') where.language = lang;
     if (onlyBreaking) where.isBreaking = true;
-    if (search) {
-      where.OR = [
-        { title: { contains: search } },
-        { summary: { contains: search } },
-      ];
+
+    // فلاتر مركّبة بـ AND حتى لا يلغي أحدها الآخر:
+    // - الفئة تطابق الأولى أو الثانوية (الخبر المختلط يظهر في تبويبيه)
+    // - البحث في العنوان أو الملخص
+    const andConditions: Record<string, unknown>[] = [];
+    if (category && category !== 'الكل') {
+      andConditions.push({ OR: [{ category }, { secondaryCategory: category }] });
     }
+    if (search) {
+      andConditions.push({
+        OR: [{ title: { contains: search } }, { summary: { contains: search } }],
+      });
+    }
+    if (andConditions.length > 0) where.AND = andConditions;
 
     let orderBy: Record<string, string>[] = [{ publishedAt: 'desc' }];
     if (sort === 'oldest') orderBy = [{ publishedAt: 'asc' }];
@@ -61,6 +68,7 @@ export async function GET(req: NextRequest) {
         publishedAt: n.publishedAt,
         language: n.language,
         category: n.category,
+        secondaryCategory: n.secondaryCategory,
         isBreaking: n.isBreaking,
         sourceCount: n.sourceCount,
         sourceName: n.source.name,

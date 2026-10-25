@@ -264,7 +264,9 @@ export async function fetchSource(source: {
         const hasStrongKw = BREAKING_STRONG_KEYWORDS.some((kw) =>
           normalizeTitle(title).includes(normalizeTitle(kw))
         );
-        const isBreaking = similar.isBreaking || hasStrongKw || newCount >= 2;
+        // تكرار عبر مصادر: نرفع العدّاد فقط — العاجل للكلمات الصريحة حصراً،
+        // وتعدد المصادر يُظهر شارة «متداول» في الواجهة بدل راية العاجل
+        const isBreaking = similar.isBreaking || hasStrongKw;
         await db.newsItem.update({
           where: { id: similar.id },
           data: { sourceCount: newCount, isBreaking },
@@ -273,10 +275,8 @@ export async function fetchSource(source: {
         continue;
       }
 
-      // 3) تصنيف الخبر (قواعد ثم نموذج للغامض)
-      const classification = await classifyNews(title, summary, {
-        multiSourceCount: 1,
-      });
+      // 3) تصنيف الخبر (قواعد موزونة ثم نموذج للحالات الغامضة)
+      const classification = await classifyNews(title, summary);
 
       await db.newsItem.create({
         data: {
@@ -289,6 +289,7 @@ export async function fetchSource(source: {
           publishedAt,
           language: classification.language === 'fr' ? 'fr' : source.language === 'fr' ? 'fr' : 'ar',
           category: classification.category,
+          secondaryCategory: classification.secondaryCategory,
           isBreaking: classification.isBreaking,
           sourceCount: 1,
           sourceId: source.id,
@@ -382,8 +383,9 @@ export async function fetchAllSources(onProgress?: (e: FetchProgressEvent) => vo
 }
 
 /**
- * ترتيب "عاجل" تلقائياً: أخبار نشرها ≥2 مصدر خلال نافذة قصيرة
- * أو تحمل كلمات عاجل صريحة → isBreaking = true
+ * ترتيب "عاجل" تلقائياً: أخبار تحمل كلمات عاجل صريحة فقط.
+ * تكرار الخبر عبر مصادر متعددة لم يعد يرفع راية العاجل —
+ * بل يُظهر شارة «متداول» في الواجهة عبر عدّاد المصادر.
  */
 export async function reevaluateBreaking(): Promise<void> {
   const since = new Date(Date.now() - SIMILARITY_WINDOW_HOURS * 3600 * 1000);
@@ -396,7 +398,7 @@ export async function reevaluateBreaking(): Promise<void> {
     const hasStrongKw = BREAKING_STRONG_KEYWORDS.some((kw) =>
       normalizeTitle(item.title).includes(normalizeTitle(kw))
     );
-    const shouldBeBreaking = hasStrongKw || item.sourceCount >= 2;
+    const shouldBeBreaking = hasStrongKw;
     if (shouldBeBreaking !== item.isBreaking) {
       await db.newsItem.update({
         where: { id: item.id },

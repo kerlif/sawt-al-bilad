@@ -9,6 +9,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { LangChip } from './flags';
+import { CATEGORY_COLORS } from '@/lib/categories';
 import {
   CalendarIcon,
   ClockIcon,
@@ -27,6 +28,8 @@ export interface NewsItemData {
   publishedAt: string;
   language: string;
   category: string;
+  /** فئة ثانوية للخبر المختلط — تظهر شارة ثانية بجانب الأولى */
+  secondaryCategory?: string | null;
   isBreaking: boolean;
   sourceCount: number;
   sourceName: string;
@@ -75,11 +78,25 @@ export default function ArticleCard({
 
   return (
     <article className={`newsprint-item py-4`}>
-      {/* ختم الفئة + العاجل + عدد المصادر + اللغة */}
+      {/* ختم الفئة + الثانوية + العاجل + المتداول + اللغة */}
       <div className="mb-2 flex flex-wrap items-center gap-2">
-        <span className="category-tag text-xs md:text-sm text-ink">
+        <span
+          className="category-tag text-xs md:text-sm"
+          style={{ color: CATEGORY_COLORS[item.category] ?? undefined }}
+        >
           {item.category}
         </span>
+        {item.secondaryCategory && item.secondaryCategory !== item.category && (
+          <span
+            className="inline-flex items-center rounded-sm border px-1.5 py-0.5 text-xs"
+            style={{
+              color: CATEGORY_COLORS[item.secondaryCategory] ?? undefined,
+              borderColor: CATEGORY_COLORS[item.secondaryCategory] ?? undefined,
+            }}
+          >
+            {item.secondaryCategory}
+          </span>
+        )}
         {item.isBreaking && (
           <span className="inline-flex items-center gap-1 rounded-sm bg-vermillion px-1.5 py-0.5 text-xs font-bold text-[#f6ecd6]">
             <FlameIcon size={12} />
@@ -91,7 +108,9 @@ export default function ArticleCard({
             className="inline-flex items-center gap-1 rounded-sm border border-rule px-1.5 py-0.5 text-xs text-muted-foreground"
             title="عدد المصادر التي نشرت الخبر نفسه"
           >
-            <SignalIcon size={12} /> {item.sourceCount} مصادر
+            <SignalIcon size={12} />
+            {!item.isBreaking && 'متداول • '}
+            {item.sourceCount} مصادر
           </span>
         )}
         <span className="inline-flex items-center text-xs text-muted-foreground">

@@ -34,7 +34,7 @@ import {
   UsersIcon,
   XIcon,
 } from '@/components/newspaper/icons';
-import { CATEGORIES } from '@/lib/categories';
+import { CATEGORIES, CATEGORY_COLORS } from '@/lib/categories';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
@@ -362,11 +362,14 @@ export default function NewspaperPage() {
                 const active = activeCat === c.name;
                 const isBreaking = c.name === 'عاجل';
                 const Icon = CATEGORY_ICONS[c.name];
+                // شريط ملوّن بلون القسم تحت التبويب النشط — يعرف القارئ وين راه بنظرة
+                const tabColor = isBreaking ? '#dc2626' : CATEGORY_COLORS[c.name];
                 return (
                   <a
                     key={c.name}
                     href={`#/category/${encodeURIComponent(c.name)}`}
                     aria-current={active ? 'page' : undefined}
+                    style={active && tabColor ? { boxShadow: `inset 0 -3px 0 ${tabColor}` } : undefined}
                     className={`shrink-0 px-3 py-1 text-base md:text-lg font-headline transition-colors border-r border-rule/50 last:border-l inline-flex items-center gap-1.5 ${
                       active
                         ? 'bg-ink text-paper'

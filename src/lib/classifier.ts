@@ -1,22 +1,32 @@
 // ============================================================
 // مصنّف الأخبار — طبقتان:
-//   1) طبقة القواعد: كلمات مفتاحية سريعة (عربي/فرنسي)
-//   2) طبقة التحقق: نموذج لغوي (LLM) لضبط الفئات الغامضة
+//   1) طبقة القواعد: كلمات مفتاحية موزونة (عربي/فرنسي)
+//   2) طبقة التحقق: نموذج لغوي (LLM) للحالات الغامضة
+//
+// قواعد الدقة (v2):
+// - القواعد وحدها لا تكفي إلا إذا كانت واثقة فعلاً: نقاط كافية
+//   وفارق واضح عن المنافس الثاني، وبلا تضارب قوي بين فئتين
+// - غير ذلك يُحال الخبر على النموذج، مع تعريف كل فئة في الـ prompt
+//   حتى يميّز المتقاربة (رئاسيات/سياسة/علاقات دولية…)
+// - ردّ النموذج يُقبل بالعربية أو الفرنسية (سابقاً كان الرد الفرنسي
+//   يُرفض فيُرجع للقواعد الخاطئة)
+// - فئة ثانوية للخبر المختلط الطبيعة، فيظهر في تبويبيه
 // ============================================================
 
 import ZAI from 'z-ai-web-dev-sdk';
 import {
   CATEGORIES,
-  DEFAULT_CATEGORY,
   ruleClassify,
   ruleBreaking,
 } from './categories';
 
 export interface ClassificationResult {
   category: string;
+  /** فئة ثانوية للخبر المختلط — null إن لم توجد منافسة قريبة */
+  secondaryCategory: string | null;
   language: 'ar' | 'fr';
   isBreaking: boolean;
-  breakingReason?: 'keyword' | 'multi-source';
+  breakingReason?: 'keyword';
   method: 'rules' | 'llm' | 'rules+llm-fallback';
 }
 
@@ -28,34 +38,40 @@ export function detectLanguage(text: string): 'ar' | 'fr' {
 
 /**
  * التصنيف الكامل للخبر.
- * - إن كانت القواعد واثقة (كلمتان فأكثر متطابقتان) نكتفي بها.
- * - في الحالات الغامضة نلجأ إلى النموذج اللغوي، وإن فشل نرجع للقواعد.
+ * - قواعد واثقة (نقاط ≥ 4، فارق ≥ 2، بلا تضارب قوي) ⇒ نكتفي بها
+ * - غير ذلك ⇒ النموذج اللغوي، وإن فشل نرجع للقواعد
+ * - «العاجل» تحدده الكلمات الصريحة فقط؛ تكرار الخبر عبر مصادر
+ *   متعددة صار يُظهر شارة «متداول» في الواجهة بدل راية العاجل
  */
 export async function classifyNews(
   title: string,
-  summary: string,
-  opts?: { multiSourceCount?: number }
+  summary: string
 ): Promise<ClassificationResult> {
-  const text = `${title} ${summary}`;
   const language = detectLanguage(title);
-  const rule = ruleClassify(text);
+  const rule = ruleClassify(title, summary);
   const breaking = ruleBreaking(title);
 
-  let isBreaking = breaking.breaking;
-  let breakingReason: ClassificationResult['breakingReason'] = breaking.breaking
+  const isBreaking = breaking.breaking;
+  const breakingReason: ClassificationResult['breakingReason'] = breaking.breaking
     ? 'keyword'
     : undefined;
 
-  // تكرار الخبر عبر أكثر من مصدر خلال وقت قصير ⇒ عاجل
-  if ((opts?.multiSourceCount ?? 1) >= 2) {
-    isBreaking = true;
-    breakingReason = 'multi-source';
-  }
+  // فئة ثانوية من القواعد — تُحفظ حتى لو حسم النموذج الأولى
+  const ruleSecondary =
+    rule.secondary && rule.secondary !== rule.category ? rule.secondary : null;
 
-  // ثقة كافية من القواعد ⇒ لا حاجة للنموذج
-  if (rule.score >= 2) {
+  // ثقة القواعد: نقاط كافية + فارق واضح + بلا تضارب قوي بين الأول والثاني
+  const runnerUp = rule.scores[1];
+  const strongConflict = Boolean(
+    runnerUp?.strong && rule.scores[0]?.strong && rule.margin < 4
+  );
+  const confident =
+    rule.score >= 4 && rule.margin >= 2 && !strongConflict;
+
+  if (confident) {
     return {
       category: rule.category,
+      secondaryCategory: ruleSecondary,
       language,
       isBreaking,
       breakingReason,
@@ -66,17 +82,32 @@ export async function classifyNews(
   // حالة غامضة ⇒ طبقة التحقق بالنموذج اللغوي
   try {
     const llmCategory = await llmClassify(title, summary, language);
+    if (llmCategory) {
+      // الثانوية: منافس القواعد إن كان مختلفاً عن حسم النموذج
+      const secondary =
+        ruleSecondary && ruleSecondary !== llmCategory ? ruleSecondary : null;
+      return {
+        category: llmCategory,
+        secondaryCategory: secondary,
+        language,
+        isBreaking,
+        breakingReason,
+        method: 'llm',
+      };
+    }
     return {
-      category: llmCategory ?? rule.category,
+      category: rule.category,
+      secondaryCategory: ruleSecondary,
       language,
       isBreaking,
       breakingReason,
-      method: llmCategory ? 'llm' : 'rules+llm-fallback',
+      method: 'rules+llm-fallback',
     };
   } catch {
     // فشل النموذج ⇒ نرجع لنتيجة القواعد
     return {
       category: rule.category,
+      secondaryCategory: ruleSecondary,
       language,
       isBreaking,
       breakingReason,
@@ -91,16 +122,19 @@ async function llmClassify(
   summary: string,
   language: 'ar' | 'fr'
 ): Promise<string | null> {
-  const categoryNames = CATEGORIES.map((c) => c.name).join(' | ');
+  // الاسم + التعريف لكل فئة — حتى يميّز النموذج الفئات المتقاربة
+  const categoryList = CATEGORIES.map(
+    (c) => `${c.name} (${c.fr}) — ${c.definition}`
+  ).join('\n');
 
   const prompt = [
     language === 'ar'
       ? 'صنِّف الخبر الجزائري التالي إلى فئة واحدة فقط من القائمة.'
       : "Classez la news algérienne suivante dans une seule catégorie de la liste.",
-    `الفئات الممكنة: ${categoryNames}`,
+    `الفئات الممكنة:\n${categoryList}`,
     language === 'ar'
-      ? 'أجب باسم الفئة فقط، دون أي شرح.'
-      : 'Répondez uniquement avec le nom de la catégorie, sans explication.',
+      ? 'أجب باسم الفئة فقط (بالعربية أو الفرنسية كما في القائمة)، دون أي شرح.'
+      : 'Répondez uniquement avec le nom de la catégorie (en arabe ou en français comme dans la liste), sans explication.',
     '',
     `العنوان: ${title}`,
     `الملخص: ${summary}`,
@@ -117,14 +151,16 @@ async function llmClassify(
       { role: 'user', content: prompt },
     ],
     temperature: 0.1,
-    max_tokens: 20,
+    max_tokens: 30,
   });
 
   const raw = completion.choices[0]?.message?.content?.trim() ?? '';
-  // تحقق أن الرد فئة صحيحة (قد يضيف النموذج رموزاً)
+  // تحقق أن الرد فئة صحيحة — بالعربية أو الفرنسية (قد يضيف النموذج رموزاً)
+  const rawLower = raw.toLowerCase();
   for (const cat of CATEGORIES) {
-    if (raw.includes(cat.name)) return cat.name;
+    if (raw.includes(cat.name) || rawLower.includes(cat.fr.toLowerCase())) {
+      return cat.name;
+    }
   }
-  if (raw.includes('عاجل')) return DEFAULT_CATEGORY; // العاجل يُحدَّد آلياً وليس بالـ LLM
   return null;
 }

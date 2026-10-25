@@ -28,7 +28,9 @@ model NewsItem {
   fetchedAt   DateTime @default(now())
   // "ar" | "fr"
   language    String   @default("ar")
-  category    String   @default("مجتمع")
+  category    String   @default("غير مصنّف")
+  // فئة ثانوية للخبر المختلط الطبيعة (null إن لم توجد منافسة قريبة)
+  secondaryCategory String?
   // هل الخبر عاجل؟ (كلمات مفتاحية دالة أو تكرار عبر مصادر متعددة)
   isBreaking  Boolean  @default(false)
   // عدد المصادر التي نشرت الخبر نفسه خلال نافذة زمنية قصيرة

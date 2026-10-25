@@ -35,7 +35,8 @@ const DDL: string[] = [
   "publishedAt" DATETIME NOT NULL,
   "fetchedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   "language" TEXT NOT NULL DEFAULT 'ar',
-  "category" TEXT NOT NULL DEFAULT 'مجتمع',
+  "category" TEXT NOT NULL DEFAULT 'غير مصنّف',
+  "secondaryCategory" TEXT,
   "isBreaking" BOOLEAN NOT NULL DEFAULT false,
   "sourceCount" INTEGER NOT NULL DEFAULT 1,
   "sourceId" TEXT NOT NULL,
@@ -83,6 +84,16 @@ export function ensureSchema(): Promise<void> {
     g.__sawtSchemaReady = (async () => {
       for (const stmt of DDL) {
         await db.$executeRawUnsafe(stmt);
+      }
+      // ترحيل خفيف لقواعد بيانات أُنشئت قبل v2: إضافة عمود الفئة
+      // الثانوية إن غاب (SQLite بلا ADD COLUMN IF NOT EXISTS)
+      const cols = (await db.$queryRawUnsafe(
+        `PRAGMA table_info("NewsItem")`
+      )) as { name?: string }[];
+      if (!cols.some((c) => c.name === 'secondaryCategory')) {
+        await db.$executeRawUnsafe(
+          `ALTER TABLE "NewsItem" ADD COLUMN "secondaryCategory" TEXT`
+        );
       }
     })().catch((err) => {
       // إعادة المحاولة في الطلب القادم عند الفشل (مثل فشل مؤقت للمسار)
